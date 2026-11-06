@@ -16,7 +16,7 @@ $navType = $navType ?? 'public';
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
 <header class="bg-royal-900 text-white shadow-lg no-print">
-<div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+<div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
 <a href="<?= url('index.php') ?>" class="flex items-center gap-2 font-extrabold text-lg">
 <span class="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500 text-white font-black">R</span>
 <span>Result<span class="text-orange-400">Padi</span></span>
@@ -26,6 +26,7 @@ $navType = $navType ?? 'public';
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/dashboard.php') ?>">Dashboard</a>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/classes.php') ?>">Classes</a>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/students.php') ?>">Students</a>
+<a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/promote.php') ?>">Promote</a>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/teachers.php') ?>">Teachers</a>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/results.php') ?>">Results</a>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/settings.php') ?>">Settings</a>
