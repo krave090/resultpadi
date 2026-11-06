@@ -24,6 +24,7 @@ $navType = $navType ?? 'public';
 <nav class="flex flex-wrap items-center justify-end gap-1 text-sm">
 <?php if ($navType === 'admin'): ?>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/dashboard.php') ?>">Dashboard</a>
+<a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/classes.php') ?>">Classes</a>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/students.php') ?>">Students</a>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/teachers.php') ?>">Teachers</a>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/results.php') ?>">Results</a>

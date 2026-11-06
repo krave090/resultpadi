@@ -28,93 +28,61 @@ function ordinal($number) {
     if (($number % 100) >= 11 && ($number % 100) <= 13) return $number . 'th';
     return $number . $ends[$number % 10];
 }
-
 function get_school_settings(?string $json): array {
-    $default = ['ca_count' => 2, 'ca_max' => 20, 'exam_max' => 60, 'auto_sync' => 0, 'grading' => [
-        ['grade'=>'A','min'=>70,'remark'=>'Excellent'], ['grade'=>'B','min'=>60,'remark'=>'Very Good'],
-        ['grade'=>'C','min'=>50,'remark'=>'Good'], ['grade'=>'D','min'=>45,'remark'=>'Fair'],
-        ['grade'=>'E','min'=>40,'remark'=>'Pass'], ['grade'=>'F','min'=>0,'remark'=>'Fail']
+    $default = ['ca_count' => 2, 'ca_max' => 20, 'exam_max' => 60, 'auto_sync' => 0, 'template_style' => 'classic', 'grading' => [
+        ['grade'=>'A','min'=>70,'remark'=>'Excellent'], ['grade'=>'B','min'=>60,'remark'=>'Very Good'], ['grade'=>'C','min'=>50,'remark'=>'Good'], ['grade'=>'D','min'=>45,'remark'=>'Fair'], ['grade'=>'E','min'=>40,'remark'=>'Pass'], ['grade'=>'F','min'=>0,'remark'=>'Fail']
     ]];
     if (!$json) return $default;
     $data = json_decode($json, true);
     return is_array($data) ? array_merge($default, $data) : $default;
 }
-
 function grade_for($score, $grading_scale = null): array {
     if (!$grading_scale) return ['grade'=>'-', 'remark'=>'-'];
     $score = (float)$score;
     foreach ($grading_scale as $g) { if ($score >= $g['min']) return ['grade'=>$g['grade'], 'remark'=>$g['remark']]; }
     return ['grade'=>'-', 'remark'=>'-'];
 }
-
-// UPDATED: Rank by Class, not whole school
 function recalculate_positions(PDO $pdo, int $sid, string $sess, string $term): void {
-    $stmt = $pdo->prepare("
-        SELECT r.id, s.class_name 
-        FROM results r 
-        JOIN students s ON s.id = r.student_id 
-        WHERE r.school_id=? AND r.session=? AND r.term=?
-        ORDER BY s.class_name ASC, r.average DESC, r.total_score DESC, r.id ASC
-    ");
-    $stmt->execute([$sid, $sess, $term]);
-    $results = $stmt->fetchAll();
-    
-    $currentClass = null;
-    $pos = 1;
-    $update = $pdo->prepare("UPDATE results SET position=? WHERE id=?");
-    
+    $stmt = $pdo->prepare("SELECT r.id, s.class_name FROM results r JOIN students s ON s.id = r.student_id WHERE r.school_id=? AND r.session=? AND r.term=? ORDER BY s.class_name ASC, r.average DESC, r.total_score DESC, r.id ASC");
+    $stmt->execute([$sid, $sess, $term]); $results = $stmt->fetchAll();
+    $currentClass = null; $pos = 1; $update = $pdo->prepare("UPDATE results SET position=? WHERE id=?");
     foreach ($results as $r) {
-        if ($currentClass !== $r['class_name']) {
-            $currentClass = $r['class_name'];
-            $pos = 1;
-        }
-        $update->execute([$pos, $r['id']]);
-        $pos++;
+        if ($currentClass !== $r['class_name']) { $currentClass = $r['class_name']; $pos = 1; }
+        $update->execute([$pos, $r['id']]); $pos++;
     }
 }
-
 function compile_student_result(PDO $pdo, int $studentId, int $schoolId, string $session, string $term): bool {
-    $stmt = $pdo->prepare("SELECT settings_json FROM schools WHERE id = ?");
-    $stmt->execute([$schoolId]);
-    $settings = get_school_settings($stmt->fetchColumn());
-
-    $stmt = $pdo->prepare("SELECT subject, ca_json, exam, total FROM teacher_scores WHERE student_id = ? AND session = ? AND term = ?");
-    $stmt->execute([$studentId, $session, $term]);
-    $scores = $stmt->fetchAll();
-
+    $stmt = $pdo->prepare("SELECT settings_json FROM schools WHERE id = ?"); $stmt->execute([$schoolId]); $settings = get_school_settings($stmt->fetchColumn());
+    $stmt = $pdo->prepare("SELECT subject, ca_json, exam, total, remark FROM teacher_scores WHERE student_id = ? AND session = ? AND term = ?"); $stmt->execute([$studentId, $session, $term]); $scores = $stmt->fetchAll();
     if (empty($scores)) return false;
-
-    $subjects = [];
-    $grandTotal = 0;
+    $subjects = []; $grandTotal = 0;
     foreach ($scores as $s) {
         $ca = json_decode($s['ca_json'], true);
-        $subjectData = ['subject' => $s['subject'], 'exam' => $s['exam'], 'total' => $s['total']];
+        $subjectData = ['subject' => $s['subject'], 'exam' => $s['exam'], 'total' => $s['total'], 'remark' => $s['remark']];
         if (is_array($ca)) { foreach ($ca as $k => $v) { $subjectData[$k] = $v; } }
-        $subjects[] = $subjectData;
-        $grandTotal += $s['total'];
+        $subjects[] = $subjectData; $grandTotal += $s['total'];
     }
-
     $max_possible = ($settings['ca_max'] * $settings['ca_count']) + $settings['exam_max'];
     $average = $max_possible > 0 ? round(($grandTotal / ($max_possible * count($subjects))) * 100, 2) : 0;
     $json = json_encode($subjects, JSON_UNESCAPED_UNICODE);
-
-    $stmt = $pdo->prepare("SELECT id FROM results WHERE student_id = ? AND session = ? AND term = ?");
-    $stmt->execute([$studentId, $session, $term]);
-    $rid = $stmt->fetchColumn();
-
-    if ($rid) {
-        $stmt = $pdo->prepare("UPDATE results SET subjects_json = ?, total_score = ?, average = ? WHERE id = ?");
-        $stmt->execute([$json, $grandTotal, $average, $rid]);
-    } else {
-        $stmt = $pdo->prepare("INSERT INTO results (student_id, school_id, session, term, subjects_json, total_score, average) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$studentId, $schoolId, $session, $term, $json, $grandTotal, $average]);
-    }
+    $stmt = $pdo->prepare("SELECT id FROM results WHERE student_id = ? AND session = ? AND term = ?"); $stmt->execute([$studentId, $session, $term]); $rid = $stmt->fetchColumn();
+    if ($rid) { $stmt = $pdo->prepare("UPDATE results SET subjects_json = ?, total_score = ?, average = ? WHERE id = ?"); $stmt->execute([$json, $grandTotal, $average, $rid]); }
+    else { $stmt = $pdo->prepare("INSERT INTO results (student_id, school_id, session, term, subjects_json, total_score, average) VALUES (?, ?, ?, ?, ?, ?, ?)"); $stmt->execute([$studentId, $schoolId, $session, $term, $json, $grandTotal, $average]); }
     return true;
 }
-
 function make_school_slug(PDO $pdo, string $name): string {
-    $b = strtolower(trim($name)); $b = preg_replace('/[^a-z0-9]+/', '-', $b); $b = trim((string)$b, '-');
-    if ($b === '') $b = 'school'; $slug = $b; $i = 2; $c = $pdo->prepare("SELECT COUNT(*) FROM schools WHERE slug=?");
+    $b = strtolower(trim($name)); $b = preg_replace('/[^a-z0-9]+/', '-', $b); $b = trim((string)$b, '-'); if ($b === '') $b = 'school'; $slug = $b; $i = 2; $c = $pdo->prepare("SELECT COUNT(*) FROM schools WHERE slug=?");
     while (true) { $c->execute([$slug]); if ((int)$c->fetchColumn() === 0) break; $slug = $b . '-' . $i; $i++; if ($i > 1000) { $slug = $b . '-' . time(); break; } }
     return $slug;
+}
+function generate_admission_no(PDO $pdo, string $school_name): string {
+    $clean_name = preg_replace('/[^A-Za-z]/', '', $school_name);
+    $initials = strtoupper(substr($clean_name, 0, 4));
+    if (strlen($initials) < 4) $initials = str_pad($initials, 4, 'X');
+    $characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'; $suffix = '';
+    for ($i = 0; $i < 4; $i++) $suffix .= $characters[rand(0, strlen($characters) - 1)];
+    $adm_no = 'RPD' . $initials . $suffix;
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE admission_no = ?"); $stmt->execute([$adm_no]);
+    if ((int)$stmt->fetchColumn() > 0) return generate_admission_no($pdo, $school_name);
+    return $adm_no;
 }
