@@ -40,8 +40,13 @@ $navType = $navType ?? 'public';
 <span class="px-3 py-2 font-bold text-orange-400">Teacher Portal</span>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('index.php') ?>">Parent Portal</a>
 <a class="px-3 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 font-semibold" href="<?= url('teacher/logout.php') ?>">Logout</a>
+<?php elseif ($navType === 'parent'): ?>
+<span class="px-3 py-2 font-bold text-orange-400">Parent Portal</span>
+<a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('index.php') ?>">Home</a>
+<a class="px-3 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 font-semibold" href="<?= url('parent/logout.php') ?>">Logout</a>
 <?php else: ?>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('index.php') ?>">Check Result</a>
+<a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('parent/login.php') ?>">Parent Login</a>
 <a class="px-3 py-2 rounded-lg hover:bg-royal-800" href="<?= url('admin/login.php') ?>">School Login</a>
 <a class="px-3 py-2 rounded-lg bg-orange-500 hover:bg-orange-600 font-semibold" href="<?= url('super/login.php') ?>">Super Admin</a>
 <?php endif; ?>

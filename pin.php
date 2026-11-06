@@ -2,40 +2,32 @@
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/includes/functions.php';
 if (empty($_SESSION['pending_check'])) redirect('index.php');
-$pdo = db();
-$check = $_SESSION['pending_check'];
-$stmt = $pdo->prepare("SELECT s.*, sc.school_name FROM students s JOIN schools sc ON sc.id=s.school_id WHERE s.id=?");
-$stmt->execute([$check['student_id']]);
-$student = $stmt->fetch();
+$pdo = db(); $check = $_SESSION['pending_check'];
+$stmt = $pdo->prepare("SELECT s.*, sc.school_name FROM students s JOIN schools sc ON sc.id=s.school_id WHERE s.id=?"); $stmt->execute([$check['student_id']]); $student = $stmt->fetch();
 if (!$student) { unset($_SESSION['pending_check']); redirect('index.php'); }
-
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_ok()) { $error = 'Session expired.'; }
     else {
         $pin_code = strtoupper(post('pin_code'));
-        $stmt = $pdo->prepare("SELECT * FROM pins WHERE pin_code=? LIMIT 1");
-        $stmt->execute([$pin_code]);
-        $pin = $stmt->fetch();
+        $stmt = $pdo->prepare("SELECT * FROM pins WHERE pin_code=? LIMIT 1"); $stmt->execute([$pin_code]); $pin = $stmt->fetch();
         if (!$pin) { $error = 'Invalid PIN.'; }
-        elseif ($pin['is_used'] == 1) { $error = 'PIN already used.'; }
+        elseif ($pin['is_used'] == 1 && $pin['student_id'] != $student['id']) { $error = 'This PIN has already been used for another student.'; }
         else {
-            $pdo->prepare("UPDATE pins SET is_used=1, used_at=NOW() WHERE id=?")->execute([$pin['id']]);
-            if (!isset($_SESSION['unlocked_results'])) $_SESSION['unlocked_results'] = [];
-            $_SESSION['unlocked_results'][] = $student['id'];
-            
-            if ($check['result_type'] === 'annual') {
-                $q = http_build_query(['id'=>$student['id']]);
-                unset($_SESSION['pending_check']);
-                header('Location: ' . url('annual_report.php?' . $q)); exit;
+            if ($pin['is_used'] == 0) {
+                $stmt = $pdo->prepare("SELECT id FROM results WHERE student_id=? ORDER BY id DESC LIMIT 1"); $stmt->execute([$student['id']]); $res_id = $stmt->fetchColumn();
+                $pdo->prepare("UPDATE pins SET is_used=1, used_at=NOW(), student_id=?, result_id=? WHERE id=?")->execute([$student['id'], $res_id, $pin['id']]);
+            }
+            if (empty($_SESSION['parent_id'])) {
+                $_SESSION['pending_parent_link'] = $student['id'];
+                redirect('parent/register.php');
             } else {
-                $stmt = $pdo->prepare("SELECT * FROM results WHERE student_id=? ORDER BY id DESC LIMIT 1");
-                $stmt->execute([$student['id']]);
-                $result = $stmt->fetch();
-                if (!$result) { $error = 'Result not ready.'; }
+                $pdo->prepare("INSERT INTO parent_students (parent_id, student_id) VALUES (?, ?) ON CONFLICT DO NOTHING")->execute([(int)$_SESSION['parent_id'], $student['id']]);
+                unset($_SESSION['pending_check']);
+                if ($check['result_type'] === 'annual') { header('Location: ' . url('annual_report.php?id=' . $student['id'])); exit; }
                 else {
+                    $stmt = $pdo->prepare("SELECT * FROM results WHERE student_id=? ORDER BY id DESC LIMIT 1"); $stmt->execute([$student['id']]); $result = $stmt->fetch();
                     $q = http_build_query(['id'=>$student['id'], 'session'=>$result['session'], 'term'=>$result['term']]);
-                    unset($_SESSION['pending_check']);
                     header('Location: ' . url('result.php?' . $q)); exit;
                 }
             }
